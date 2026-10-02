@@ -1,0 +1,6 @@
+{
+  "name": "BillMaster",
+  "description": "AI-assisted billing and catalog learning system for retail and hardware shops, converting physical bills to digital invoices with multilingual Marathi & English support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

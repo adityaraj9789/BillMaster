@@ -1,0 +1,91 @@
+import React from 'react';
+import { BusinessProfile } from '../types';
+
+interface HeaderProps {
+  business: BusinessProfile;
+  language: 'en' | 'mr' | 'mixed';
+  onToggleLanguage: () => void;
+  unreadCount?: number;
+  onOpenNotifications: () => void;
+  onOpenSettings: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  business,
+  language,
+  onToggleLanguage,
+  unreadCount = 0,
+  onOpenNotifications,
+  onOpenSettings,
+}) => {
+  return (
+    <header className="fixed top-0 inset-x-0 z-40 bg-surface/95 backdrop-blur-md border-b border-surface-container-high pt-safe">
+      <div className="h-18 px-6 flex items-center justify-between gap-4 max-w-5xl mx-auto w-full">
+        {/* Brand & Shop identity */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-primary-container flex items-center justify-center shrink-0 shadow-xs">
+            <span className="material-symbols-outlined text-[22px] text-secondary-fixed">
+              receipt_long
+            </span>
+          </div>
+
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-headline-md text-headline-md text-on-surface font-bold tracking-tight">
+                BillMaster
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-[11px] font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                Offline Ready
+              </span>
+            </div>
+            <span className="font-body-md text-sm text-on-surface-variant truncate">
+              {business.shop_name_marathi || business.shop_name}
+            </span>
+          </div>
+        </div>
+
+        {/* Header Right Action Group */}
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Bilingual Toggle */}
+          <button
+            onClick={onToggleLanguage}
+            className="h-10 px-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center gap-1.5 font-label-md text-sm transition-colors active:scale-98"
+            title="Switch Language: English / मराठी"
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[18px] text-on-surface-variant">
+              translate
+            </span>
+            <span className="font-semibold">{language === 'mr' ? 'मराठी' : language === 'en' ? 'English' : 'EN | मर'}</span>
+          </button>
+
+          {/* Notifications Button */}
+          <button
+            onClick={onOpenNotifications}
+            className="relative w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface-variant transition-colors active:scale-98"
+            aria-label="Pending review notifications"
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[20px]">notifications</span>
+            {unreadCount > 0 && (
+              <span className="absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-error text-on-error font-label-sm text-[10px] flex items-center justify-center leading-none font-bold">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+
+          {/* Settings / Profile Button */}
+          <button
+            onClick={onOpenSettings}
+            className="w-10 h-10 rounded-xl bg-surface-container hover:bg-surface-container-high flex items-center justify-center text-on-surface transition-colors active:scale-98"
+            title="Shop Profile & Settings"
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[20px]">settings</span>
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+};

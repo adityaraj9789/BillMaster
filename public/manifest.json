@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "name": "BillMaster - AI Shop Billing & Bahi Khata",
+  "short_name": "BillMaster",
+  "description": "AI-assisted billing and catalog learning system for retail and hardware shops with Marathi & English support.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#131b2e",
+  "background_color": "#f8f9ff",
+  "icons": [
+    {
+      "src": "/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["business", "finance", "productivity"]
+}
