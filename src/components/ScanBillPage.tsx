@@ -2,10 +2,12 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Bill } from '../types';
 import { db } from '../services/db/repository';
 import { captureBillWithCapacitor } from '../services/capacitor/platform';
+import { t } from '../services/i18n/translations';
 
 interface ScanBillPageProps {
   onScanComplete: (scannedBill: Partial<Bill>, imagePreview?: string) => void;
   onManualTypeClick: () => void;
+  language?: 'en' | 'mr' | 'mixed';
 }
 
 type CameraStatus = 'idle' | 'initializing' | 'active' | 'denied' | 'unsupported' | 'captured';
@@ -13,7 +15,9 @@ type CameraStatus = 'idle' | 'initializing' | 'active' | 'denied' | 'unsupported
 export const ScanBillPage: React.FC<ScanBillPageProps> = ({
   onScanComplete,
   onManualTypeClick,
+  language = 'en',
 }) => {
+  const currentLang = language === 'mr' ? 'mr' : 'en';
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('idle');
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [torchOn, setTorchOn] = useState(false);
@@ -329,14 +333,16 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold text-on-surface">Scan Physical Bill</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-on-surface">
+              {t('scan_title', currentLang)}
+            </h1>
             <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[11px] font-bold">
               <span className="material-symbols-outlined text-[13px]">document_scanner</span>
               AI Bill Scanner
             </span>
           </div>
           <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5">
-            Capture or upload physical invoices (कच्ची पावती) in Marathi or English
+            {t('scan_subtitle', currentLang)}
           </p>
         </div>
         <button
@@ -345,7 +351,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
           type="button"
         >
           <span className="material-symbols-outlined text-[18px]">keyboard</span>
-          <span>Manual POS</span>
+          <span>{t('manual_pos', currentLang)}</span>
         </button>
       </div>
 
@@ -365,14 +371,14 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
               className="h-9 px-3 rounded-lg bg-surface text-on-surface text-xs font-bold"
               type="button"
             >
-              Try Again
+              {t('try_again', currentLang)}
             </button>
             <button
               onClick={onManualTypeClick}
               className="h-9 px-3 rounded-lg bg-error text-on-error text-xs font-bold"
               type="button"
             >
-              Enter Manually
+              {t('manual_pos', currentLang)}
             </button>
           </div>
         </div>
@@ -414,9 +420,11 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
             <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center mb-3">
               <span className="material-symbols-outlined text-[36px] text-secondary-fixed">photo_camera</span>
             </div>
-            <h3 className="font-bold text-lg">Start Camera to Scan Bill</h3>
+            <h3 className="font-bold text-lg">
+              {t('start_camera', currentLang)}
+            </h3>
             <p className="text-xs sm:text-sm text-white/80 mt-1 mb-5">
-              Click below to grant camera access and align your physical bill within the frame.
+              {t('start_camera_prompt', currentLang)}
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
               <button
@@ -425,7 +433,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
                 type="button"
               >
                 <span className="material-symbols-outlined text-[20px]">videocam</span>
-                <span>Start Camera</span>
+                <span>{t('start_camera', currentLang)}</span>
               </button>
               <button
                 onClick={() => handleDeviceCameraCapture('photos')}
@@ -433,7 +441,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
                 type="button"
               >
                 <span className="material-symbols-outlined text-[20px]">folder_open</span>
-                <span>Upload Bill Photo</span>
+                <span>{t('upload_bill_photo', currentLang)}</span>
               </button>
             </div>
           </div>
@@ -445,9 +453,11 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
             <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center mb-3">
               <span className="material-symbols-outlined text-[32px] text-error">no_photography</span>
             </div>
-            <h3 className="font-bold text-base sm:text-lg">Camera Permission Denied</h3>
+            <h3 className="font-bold text-base sm:text-lg">
+              {t('camera_permission_needed', currentLang)}
+            </h3>
             <p className="text-xs sm:text-sm text-white/80 mt-1 mb-4">
-              Please allow camera access in your device or browser settings, or select a photo from your gallery.
+              {t('camera_permission_desc', currentLang)}
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2.5">
               <button
@@ -456,7 +466,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
                 type="button"
               >
                 <span className="material-symbols-outlined text-[16px]">refresh</span>
-                <span>Retry Permission</span>
+                <span>{t('retry_permission', currentLang)}</span>
               </button>
               <button
                 onClick={() => handleDeviceCameraCapture('photos')}
@@ -464,7 +474,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
                 type="button"
               >
                 <span className="material-symbols-outlined text-[16px]">folder_open</span>
-                <span>Upload Bill Photo</span>
+                <span>{t('upload_bill_photo', currentLang)}</span>
               </button>
             </div>
           </div>
@@ -476,9 +486,11 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
             <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center mb-3">
               <span className="material-symbols-outlined text-[32px] text-secondary">photo_camera</span>
             </div>
-            <h3 className="font-bold text-base sm:text-lg">Capture Bill Photo</h3>
+            <h3 className="font-bold text-base sm:text-lg">
+              {t('upload_bill_photo', currentLang)}
+            </h3>
             <p className="text-xs sm:text-sm text-white/80 mt-1 mb-4">
-              Use your device camera or select a photo/PDF of your physical bill.
+              {t('start_camera_prompt', currentLang)}
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               <button
@@ -487,7 +499,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
                 type="button"
               >
                 <span className="material-symbols-outlined text-[20px]">photo_camera</span>
-                <span>Open Camera</span>
+                <span>{t('take_photo', currentLang)}</span>
               </button>
               <button
                 onClick={() => handleDeviceCameraCapture('photos')}
@@ -495,7 +507,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
                 type="button"
               >
                 <span className="material-symbols-outlined text-[20px]">folder_open</span>
-                <span>Choose File / Gallery</span>
+                <span>{t('gallery_files', currentLang)}</span>
               </button>
             </div>
           </div>
@@ -522,7 +534,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
             <div className="absolute top-3 inset-x-3 z-30 flex items-center justify-between pointer-events-auto">
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-xs font-semibold">
                 <span className="w-2 h-2 rounded-full bg-secondary-fixed"></span>
-                <span>Align Bill Inside Box</span>
+                <span>{t('align_bill', currentLang)}</span>
               </div>
 
               <div className="flex items-center gap-2">
@@ -560,7 +572,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
             <span className="material-symbols-outlined text-[44px] text-secondary-fixed animate-spin mb-3">
               progress_activity
             </span>
-            <span className="font-bold text-lg mb-1">Analyzing Physical Bill with AI</span>
+            <span className="font-bold text-lg mb-1">{t('analyzing_bill', currentLang)}</span>
             <p className="text-sm text-white/80 max-w-sm mb-4">{pipelineMessage}</p>
             <div className="w-48 h-2 bg-white/20 rounded-full overflow-hidden">
               <div
@@ -578,8 +590,12 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
           <div className="flex items-center gap-3">
             <span className="material-symbols-outlined text-[24px] text-secondary">check_circle</span>
             <div>
-              <span className="font-bold text-sm text-on-surface block">Photo Captured</span>
-              <span className="text-xs text-on-surface-variant">Ready for AI extraction</span>
+              <span className="font-bold text-sm text-on-surface block">
+                {t('photo_captured', currentLang)}
+              </span>
+              <span className="text-xs text-on-surface-variant">
+                {t('ready_for_extraction', currentLang)}
+              </span>
             </div>
           </div>
 
@@ -590,7 +606,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
               type="button"
             >
               <span className="material-symbols-outlined text-[18px]">replay</span>
-              <span>Retake</span>
+              <span>{t('retake', currentLang)}</span>
             </button>
             <button
               onClick={() => handleDeviceCameraCapture('camera')}
@@ -598,7 +614,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
               type="button"
             >
               <span className="material-symbols-outlined text-[18px]">photo_camera</span>
-              <span>New Photo</span>
+              <span>{t('new_photo', currentLang)}</span>
             </button>
             <button
               onClick={() => processImage(capturedImage)}
@@ -606,7 +622,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
               type="button"
             >
               <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
-              <span>Extract with AI</span>
+              <span>{t('extract_with_ai', currentLang)}</span>
             </button>
           </div>
         </div>
@@ -622,7 +638,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
             type="button"
           >
             <span className="material-symbols-outlined text-[22px] text-secondary">photo_library</span>
-            <span>Gallery / Files</span>
+            <span>{t('gallery_files', currentLang)}</span>
           </button>
 
           {/* Primary Camera Buttons */}
@@ -634,7 +650,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
                 type="button"
               >
                 <span className="material-symbols-outlined text-[24px]">photo_camera</span>
-                <span>Take Photo</span>
+                <span>{t('take_photo', currentLang)}</span>
               </button>
             ) : (
               <button
@@ -643,7 +659,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
                 type="button"
               >
                 <span className="material-symbols-outlined text-[24px]">photo_camera</span>
-                <span>Start Camera</span>
+                <span>{t('start_camera', currentLang)}</span>
               </button>
             )}
           </div>
@@ -655,7 +671,7 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
             type="button"
           >
             <span className="material-symbols-outlined text-[20px] text-on-surface-variant">dialpad</span>
-            <span>Manual Type</span>
+            <span>{t('manual_pos', currentLang)}</span>
           </button>
         </div>
       )}
@@ -667,10 +683,10 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
         </span>
         <div className="text-xs text-on-surface-variant space-y-1">
           <p className="font-semibold text-on-surface">
-            मानवी पडताळणी (Human Verification Guaranteed):
+            {t('human_verification_guaranteed', currentLang)}
           </p>
           <p>
-            Powered by high-precision document scanning and Gemini AI. Captured bills are analyzed with handwriting understanding and matched against your catalogue before any records are saved.
+            {t('trust_note', currentLang)}
           </p>
         </div>
       </div>

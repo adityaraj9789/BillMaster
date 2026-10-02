@@ -1,5 +1,6 @@
 import React from 'react';
 import { BusinessProfile } from '../types';
+import { t } from '../services/i18n/translations';
 
 interface HeaderProps {
   business: BusinessProfile;
@@ -18,6 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNotifications,
   onOpenSettings,
 }) => {
+  const currentLang = language === 'mr' ? 'mr' : 'en';
+
   return (
     <header className="fixed top-0 inset-x-0 z-40 bg-surface/95 backdrop-blur-md border-b border-surface-container-high pt-safe">
       <div className="h-16 sm:h-18 px-3.5 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 max-w-5xl mx-auto w-full">
@@ -32,32 +35,34 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex flex-col min-w-0">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className="text-base sm:text-lg text-on-surface font-bold tracking-tight">
-                BillMaster
+                {t('app_name', currentLang)}
               </span>
               <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[11px] font-semibold">
                 <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>
-                Offline Ready
+                {t('offline_ready', currentLang)}
               </span>
             </div>
             <span className="text-xs sm:text-sm text-on-surface-variant truncate">
-              {business.shop_name_marathi || business.shop_name}
+              {currentLang === 'mr' ? (business.shop_name_marathi || business.shop_name) : (business.shop_name || business.shop_name_marathi)}
             </span>
           </div>
         </div>
 
         {/* Header Right Action Group */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Bilingual Toggle */}
+          {/* Bilingual Toggle Button */}
           <button
             onClick={onToggleLanguage}
-            className="h-10 px-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center gap-1.5 font-label-md text-sm transition-colors active:scale-98"
-            title="Switch Language: English / मराठी"
+            className="h-10 px-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface flex items-center gap-1.5 font-label-md text-sm transition-all active:scale-95 border border-surface-container-highest shadow-xs"
+            title={currentLang === 'mr' ? 'Switch to English' : 'मराठीमध्ये बदला'}
             type="button"
           >
-            <span className="material-symbols-outlined text-[18px] text-on-surface-variant">
+            <span className="material-symbols-outlined text-[18px] text-secondary">
               translate
             </span>
-            <span className="font-semibold">{language === 'mr' ? 'मराठी' : language === 'en' ? 'English' : 'EN | मर'}</span>
+            <span className="font-bold text-xs sm:text-sm">
+              {currentLang === 'mr' ? 'English' : 'मराठी'}
+            </span>
           </button>
 
           {/* Notifications Button */}

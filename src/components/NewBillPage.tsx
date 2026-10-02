@@ -3,6 +3,7 @@ import { Bill, BillItem, BusinessProfile, Customer, Product } from '../types';
 import { calculateBillTotals } from '../services/billing/calculator';
 import { downloadInvoicePDF, printInvoiceDocument } from '../services/pdf/invoice-generator';
 import { shareInvoice } from '../services/capacitor/platform';
+import { t } from '../services/i18n/translations';
 
 interface NewBillPageProps {
   business: BusinessProfile;
@@ -12,6 +13,7 @@ interface NewBillPageProps {
   onSaveBill: (bill: Bill) => void;
   onChangePartyClick: () => void;
   selectedCustomer?: Customer;
+  language?: 'en' | 'mr' | 'mixed';
 }
 
 export const NewBillPage: React.FC<NewBillPageProps> = ({
@@ -22,7 +24,9 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
   onSaveBill,
   onChangePartyClick,
   selectedCustomer,
+  language = 'en',
 }) => {
+  const currentLang = language === 'mr' ? 'mr' : 'en';
   const [customer, setCustomer] = useState<Customer>(
     selectedCustomer ||
       (customers.length > 0
@@ -274,7 +278,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
               person_pin
             </span>
             <span className="font-label-sm text-label-sm uppercase text-on-surface-variant font-bold">
-              Billed To (ग्राहक तपशील)
+              {t('billed_to', currentLang)}
             </span>
           </div>
           <button
@@ -283,7 +287,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
             type="button"
           >
             <span className="material-symbols-outlined text-[14px]">swap_horiz</span>
-            Change Party
+            {t('change_party', currentLang)}
           </button>
         </div>
 
@@ -301,7 +305,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
               </span>
             </div>
             <span className="font-body-md text-body-md text-on-surface-variant truncate">
-              {customer.address || 'Walk-in Retail'}
+              {customer.address || (currentLang === 'mr' ? 'काउंटर किरकोळ ग्राहक' : 'Walk-in Retail')}
             </span>
             {customer.phone && (
               <span className="flex items-center gap-1 mt-1 text-label-md text-on-surface-variant">
@@ -314,7 +318,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
 
         {/* Payment mode switcher */}
         <div className="flex items-center gap-2 pt-1 overflow-x-auto no-scrollbar">
-          <span className="font-label-sm text-on-surface-variant shrink-0">Payment Mode:</span>
+          <span className="font-label-sm text-on-surface-variant shrink-0">{t('payment_mode', currentLang)}</span>
           {(['cash', 'upi', 'credit', 'neft'] as const).map((mode) => (
             <button
               key={mode}
@@ -326,7 +330,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
               }`}
               type="button"
             >
-              {mode === 'credit' ? 'उधार (Credit)' : mode}
+              {mode === 'cash' ? t('cash', currentLang) : mode === 'credit' ? t('credit', currentLang) : mode.toUpperCase()}
             </button>
           ))}
         </div>
@@ -336,12 +340,12 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
       <div className="flex flex-col gap-space-sm">
         <div className="flex items-center justify-between px-space-xs">
           <div className="flex items-center gap-space-xs">
-            <span className="font-headline-sm text-headline-sm text-on-surface">Items (वस्तू सूची)</span>
+            <span className="font-headline-sm text-headline-sm text-on-surface">{t('items', currentLang)}</span>
             <span className="px-2 py-0.5 rounded-full bg-surface-container font-label-sm text-label-sm text-on-surface-variant font-bold">
-              {items.length} {items.length === 1 ? 'Item' : 'Items'}
+              {items.length} {items.length === 1 ? (currentLang === 'mr' ? 'वस्तू' : 'Item') : (currentLang === 'mr' ? 'वस्तू' : 'Items')}
             </span>
           </div>
-          <span className="font-label-md text-label-md text-secondary font-medium">GST Auto-Calculated</span>
+          <span className="font-label-md text-label-md text-secondary font-medium">{t('gst_auto', currentLang)}</span>
         </div>
 
         {items.length > 0 ? (
@@ -417,9 +421,9 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
             <span className="material-symbols-outlined text-[32px] text-on-surface-variant opacity-60">
               add_shopping_cart
             </span>
-            <p className="font-body-bold text-on-surface">No items in this bill yet</p>
+            <p className="font-body-bold text-on-surface">{t('no_items_in_bill', currentLang)}</p>
             <p className="font-label-sm text-on-surface-variant max-w-sm">
-              Tap "+ Add Item" below to add a product from your catalogue, or type an item manually.
+              {t('no_items_sub', currentLang)}
             </p>
           </div>
         )}
@@ -432,7 +436,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
             type="button"
           >
             <span className="material-symbols-outlined text-[22px]">inventory_2</span>
-            <span className="font-label-lg text-label-lg">Select from Catalogue</span>
+            <span className="font-label-lg text-label-lg">{t('select_catalogue', currentLang)}</span>
           </button>
 
           <button
@@ -441,7 +445,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
             type="button"
           >
             <span className="material-symbols-outlined text-[22px]">edit</span>
-            <span className="font-label-lg text-label-lg">+ Type Item Manually</span>
+            <span className="font-label-lg text-label-lg">{t('type_manually', currentLang)}</span>
           </button>
         </div>
 
@@ -645,7 +649,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
           <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
             <path d="M12.031 2C6.516 2 2.031 6.484 2.031 12c0 1.953.563 3.781 1.531 5.328L2 22l4.828-1.531A9.97 9.97 0 0 0 12.031 22c5.516 0 10-4.484 10-10s-4.484-10-10-10zm5.828 14.281c-.25.703-1.453 1.344-2.016 1.406-.547.063-1.25.094-3.64-0.891-2.859-1.188-4.703-4.094-4.844-4.281-.141-.188-1.172-1.563-1.172-2.984 0-1.422.75-2.125 1.016-2.406.266-.281.578-.359.781-.359.188 0 .391 0 .563.016.188.016.422-.078.656.484.25.594.859 2.094.938 2.25.078.156.125.344.031.547-.078.203-.125.328-.25.484-.125.156-.266.344-.375.469-.125.125-.266.266-.109.531.156.266.688 1.141 1.484 1.844 1.031.922 1.906 1.203 2.188 1.344.281.141.438.125.609-.078.172-.203.734-.859.938-1.156.203-.297.406-.25.688-.141.281.109 1.797.844 2.109 1 .313.156.516.234.594.359.078.125.078.734-.172 1.438z"></path>
           </svg>
-          <span>Share Invoice on WhatsApp (व्हॉट्सॲप)</span>
+          <span>{t('share_whatsapp', currentLang)}</span>
         </button>
 
         <div className="grid grid-cols-3 gap-space-sm">
@@ -660,7 +664,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
             type="button"
           >
             <span className="material-symbols-outlined text-[20px]">save</span>
-            <span>Save Bill</span>
+            <span>{t('save_bill', currentLang)}</span>
           </button>
           <button
             onClick={handlePrint}
@@ -671,7 +675,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
             type="button"
           >
             <span className="material-symbols-outlined text-[20px]">print</span>
-            <span>Print</span>
+            <span>{t('print', currentLang)}</span>
           </button>
           <button
             onClick={handleDownloadPDF}
@@ -682,7 +686,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
             type="button"
           >
             <span className="material-symbols-outlined text-[20px]">download</span>
-            <span>PDF</span>
+            <span>{t('pdf', currentLang)}</span>
           </button>
         </div>
       </div>
@@ -692,7 +696,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-4">
           <div className="bg-surface rounded-2xl w-full max-w-lg max-h-[80vh] flex flex-col p-4 shadow-2xl">
             <div className="flex justify-between items-center pb-2 border-b border-surface-container">
-              <h3 className="font-headline-sm text-headline-sm">Add Item to Bill</h3>
+              <h3 className="font-headline-sm text-headline-sm">{t('add_item_to_bill', currentLang)}</h3>
               <button
                 onClick={() => setShowItemPicker(false)}
                 className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center"
@@ -706,7 +710,7 @@ export const NewBillPage: React.FC<NewBillPageProps> = ({
                 type="search"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search products by English or मराठी or SKU..."
+                placeholder={t('search_products', currentLang)}
                 className="w-full h-11 px-3 bg-surface-container rounded-xl outline-none"
                 autoFocus
               />

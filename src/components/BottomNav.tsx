@@ -1,13 +1,17 @@
 import React from 'react';
+import { t } from '../services/i18n/translations';
 
 export type NavTab = 'dashboard' | 'products-catalogue' | 'scan-bill' | 'new-bill' | 'bills-records';
 
 interface BottomNavProps {
   activeTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
+  language?: 'en' | 'mr' | 'mixed';
 }
 
-export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab }) => {
+export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab, language = 'en' }) => {
+  const currentLang = language === 'mr' ? 'mr' : 'en';
+
   return (
     <nav className="fixed bottom-0 inset-x-0 z-50 pb-safe bg-surface/90 backdrop-blur-xl shadow-[0_-2px_12px_rgba(0,0,0,0.06)] no-print">
       <div className="flex justify-around items-center h-20 px-2 max-w-lg mx-auto">
@@ -27,7 +31,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab }) 
           >
             home
           </span>
-          <span className="font-label-sm text-label-sm">Home</span>
+          <span className="font-label-sm text-label-sm">{t('nav_home', currentLang)}</span>
         </button>
 
         {/* Products */}
@@ -46,7 +50,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab }) 
           >
             inventory_2
           </span>
-          <span className="font-label-sm text-label-sm">Products</span>
+          <span className="font-label-sm text-label-sm">{t('nav_products', currentLang)}</span>
         </button>
 
         {/* Primary Scan Button (Elevated) */}
@@ -57,7 +61,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab }) 
           type="button"
         >
           <span className="material-symbols-outlined text-[26px]">document_scanner</span>
-          <span className="font-label-sm text-[10px] text-on-primary font-bold">Scan</span>
+          <span className="font-label-sm text-[10px] text-on-primary font-bold">{t('nav_scan', currentLang)}</span>
         </button>
 
         {/* New Bill */}
@@ -76,7 +80,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab }) 
           >
             point_of_sale
           </span>
-          <span className="font-label-sm text-label-sm">New Bill</span>
+          <span className="font-label-sm text-label-sm">{t('nav_new_bill', currentLang)}</span>
         </button>
 
         {/* Records */}
@@ -95,7 +99,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onSelectTab }) 
           >
             receipt_long
           </span>
-          <span className="font-label-sm text-label-sm">Records</span>
+          <span className="font-label-sm text-label-sm">{t('nav_records', currentLang)}</span>
         </button>
       </div>
     </nav>

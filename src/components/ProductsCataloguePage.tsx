@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Product } from '../types';
+import { t } from '../services/i18n/translations';
 
 interface ProductsCataloguePageProps {
   products: Product[];
@@ -10,6 +11,7 @@ interface ProductsCataloguePageProps {
   onDeleteAlias: (productId: string, aliasId: string) => void;
   onAddToBill: (product: Product) => void;
   onScanClick: () => void;
+  language?: 'en' | 'mr' | 'mixed';
 }
 
 export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
@@ -21,11 +23,15 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
   onDeleteAlias,
   onAddToBill,
   onScanClick,
+  language = 'en',
 }) => {
+  const currentLang = language === 'mr' ? 'mr' : 'en';
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
-  const categories = ['All', 'Motors & Pumps', 'Cables & Wire', 'Pipes & Fittings', 'Low Stock'];
+  const categories = currentLang === 'mr'
+    ? ['All', 'Motors & Pumps', 'Cables & Wire', 'Pipes & Fittings', 'Low Stock']
+    : ['All', 'Motors & Pumps', 'Cables & Wire', 'Pipes & Fittings', 'Low Stock'];
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
@@ -87,7 +93,7 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 id="catalogue-search"
-                placeholder="Search by English, मराठी, Brand, SKU or Shorthand..."
+                placeholder={t('search_catalogue', currentLang)}
                 className="w-full h-12 pl-11 pr-14 rounded-xl bg-surface-container text-on-surface font-body-md text-body-md placeholder:text-on-surface-variant placeholder:opacity-75 focus:outline-none focus:bg-surface-container-high shadow-sm transition-colors"
               />
               <button
@@ -174,16 +180,16 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
                     <div className="flex flex-col min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-headline-sm text-headline-sm text-on-surface leading-snug">
-                          {prod.name}
+                          {currentLang === 'mr' ? (prod.name_marathi || prod.name) : prod.name}
                         </span>
                         <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-bold">
                           <span className="material-symbols-outlined text-[13px] mr-0.5">verified</span>{' '}
-                          AI Auto-Trained
+                          AI
                         </span>
                       </div>
-                      {prod.name_marathi && (
+                      {(currentLang === 'mr' ? prod.name : prod.name_marathi) && (
                         <span className="font-body-md text-body-md text-on-surface-variant font-medium mt-0.5">
-                          {prod.name_marathi}
+                          {currentLang === 'mr' ? prod.name : prod.name_marathi}
                         </span>
                       )}
                       <div className="flex items-center gap-2 mt-1 text-on-surface-variant font-label-md text-label-md flex-wrap">
@@ -196,7 +202,7 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
                         </span>
                         <span>•</span>
                         <span className={prod.stock <= prod.minimum_stock ? 'text-error font-bold' : 'text-secondary font-bold'}>
-                          {prod.stock} In Stock
+                          {prod.stock} {prod.stock <= prod.minimum_stock ? t('low_stock', currentLang) : t('in_stock', currentLang)}
                         </span>
                       </div>
                     </div>
@@ -219,8 +225,8 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="font-label-md text-label-md truncate">
-                      Current rate <strong className="text-on-surface">₹{prod.selling_price.toLocaleString('en-IN')}</strong>
-                      {prod.last_billed_date && ` • Last billed on ${prod.last_billed_date}`}
+                      {currentLang === 'mr' ? 'चालू दर' : 'Current rate'} <strong className="text-on-surface">₹{prod.selling_price.toLocaleString('en-IN')}</strong>
+                      {prod.last_billed_date && ` • ${currentLang === 'mr' ? 'शेवटचे बिल' : 'Last billed'} ${prod.last_billed_date}`}
                     </p>
                   </div>
                 </div>
@@ -230,14 +236,14 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="font-label-sm text-label-sm text-on-surface-variant flex items-center gap-1 font-bold">
                       <span className="material-symbols-outlined text-[14px]">psychology</span>
-                      LEARNED OCR ALIASES ({prod.aliases?.length || 0})
+                      {currentLang === 'mr' ? 'शिकवलेली टोपणनावे' : 'LEARNED OCR ALIASES'} ({prod.aliases?.length || 0})
                     </span>
                     <button
                       onClick={() => onTeachAlias(prod)}
                       className="font-label-sm text-label-sm text-secondary hover:underline font-bold"
                       type="button"
                     >
-                      + Teach Alias
+                      {t('teach_alias', currentLang)}
                     </button>
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -260,7 +266,7 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
                       ))
                     ) : (
                       <span className="font-label-sm text-on-surface-variant italic">
-                        No aliases yet. Tap "+ Teach Alias" or scan a bill to auto-learn.
+                        {currentLang === 'mr' ? 'अजून टोपणनाव शिकवले नाही. "+ टोपणनाव शिकवा" वर क्लिक करा.' : 'No aliases yet. Tap "+ Teach Alias" or scan a bill to auto-learn.'}
                       </span>
                     )}
                   </div>
@@ -275,7 +281,7 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
                       type="button"
                     >
                       <span className="material-symbols-outlined text-[16px]">edit</span>
-                      <span>Edit</span>
+                      <span>{t('edit', currentLang)}</span>
                     </button>
                     <button
                       onClick={() => onViewPriceLog(prod)}
@@ -283,7 +289,7 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
                       type="button"
                     >
                       <span className="material-symbols-outlined text-[16px]">history</span>
-                      <span>Price Log</span>
+                      <span>{t('price_log', currentLang)}</span>
                     </button>
                   </div>
                   <button
@@ -292,7 +298,7 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
                     type="button"
                   >
                     <span className="material-symbols-outlined text-[18px]">add_shopping_cart</span>
-                    <span>+ Add to Bill</span>
+                    <span>{t('add_to_bill', currentLang)}</span>
                   </button>
                 </div>
               </div>

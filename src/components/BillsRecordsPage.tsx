@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Bill } from '../types';
+import { t } from '../services/i18n/translations';
 
 interface BillsRecordsPageProps {
   bills: Bill[];
@@ -11,6 +12,7 @@ interface BillsRecordsPageProps {
   onViewBillDetails: (bill: Bill) => void;
   onNewBillClick?: () => void;
   onScanClick?: () => void;
+  language?: 'en' | 'mr' | 'mixed';
 }
 
 export const BillsRecordsPage: React.FC<BillsRecordsPageProps> = ({
@@ -22,7 +24,9 @@ export const BillsRecordsPage: React.FC<BillsRecordsPageProps> = ({
   onExportTally,
   onNewBillClick,
   onScanClick,
+  language = 'en',
 }) => {
+  const currentLang = language === 'mr' ? 'mr' : 'en';
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMode, setFilterMode] = useState<string>('all');
 
@@ -68,13 +72,12 @@ export const BillsRecordsPage: React.FC<BillsRecordsPageProps> = ({
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-col min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="font-headline-sm text-headline-sm text-on-surface">खातेवही नोंद</span>
-              <span className="font-label-md text-label-md text-on-surface-variant font-normal">
-                (Ledger Records)
+              <span className="font-headline-sm text-headline-sm text-on-surface">
+                {t('records_title', currentLang)}
               </span>
             </div>
             <span className="font-label-sm text-label-sm text-on-surface-variant tracking-normal">
-              {bills.length} Bills Recorded
+              {bills.length} {currentLang === 'mr' ? 'बिले नोंदवली' : 'Bills Recorded'}
             </span>
           </div>
           {bills.length > 0 && (
@@ -86,7 +89,7 @@ export const BillsRecordsPage: React.FC<BillsRecordsPageProps> = ({
               <span className="material-symbols-outlined text-[18px] text-secondary">
                 sim_card_download
               </span>
-              <span>Tally / Excel</span>
+              <span>{t('export_csv', currentLang)}</span>
             </button>
           )}
         </div>
@@ -95,7 +98,7 @@ export const BillsRecordsPage: React.FC<BillsRecordsPageProps> = ({
         <div className="bg-surface-container-low rounded-lg p-3 flex flex-col gap-2">
           <div className="flex items-baseline justify-between">
             <span className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider font-semibold">
-              Total Billing (एकूण व्यवहार)
+              {t('total_revenue', currentLang)}
             </span>
             {bills.length > 0 && (
               <span className="font-label-sm text-label-sm text-secondary font-bold inline-flex items-center gap-0.5">
