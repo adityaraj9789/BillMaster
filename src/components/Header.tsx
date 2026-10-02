@@ -20,26 +20,26 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="fixed top-0 inset-x-0 z-40 bg-surface/95 backdrop-blur-md border-b border-surface-container-high pt-safe">
-      <div className="h-18 px-6 flex items-center justify-between gap-4 max-w-5xl mx-auto w-full">
+      <div className="h-16 sm:h-18 px-3.5 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 max-w-5xl mx-auto w-full">
         {/* Brand & Shop identity */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-primary-container flex items-center justify-center shrink-0 shadow-xs">
-            <span className="material-symbols-outlined text-[22px] text-secondary-fixed">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary-container flex items-center justify-center shrink-0 shadow-xs">
+            <span className="material-symbols-outlined text-[20px] sm:text-[22px] text-secondary-fixed">
               receipt_long
             </span>
           </div>
 
           <div className="flex flex-col min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-headline-md text-headline-md text-on-surface font-bold tracking-tight">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-base sm:text-lg text-on-surface font-bold tracking-tight">
                 BillMaster
               </span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-[11px] font-semibold">
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[11px] font-semibold">
                 <span className="w-1.5 h-1.5 rounded-full bg-secondary"></span>
                 Offline Ready
               </span>
             </div>
-            <span className="font-body-md text-sm text-on-surface-variant truncate">
+            <span className="text-xs sm:text-sm text-on-surface-variant truncate">
               {business.shop_name_marathi || business.shop_name}
             </span>
           </div>

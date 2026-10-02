@@ -1,133 +1,314 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Bill } from '../types';
+import { db } from '../services/db/repository';
+import { captureBillWithCapacitor } from '../services/capacitor/platform';
 
 interface ScanBillPageProps {
   onScanComplete: (scannedBill: Partial<Bill>, imagePreview?: string) => void;
   onManualTypeClick: () => void;
 }
 
+type CameraStatus = 'idle' | 'initializing' | 'active' | 'denied' | 'unsupported' | 'captured';
+
 export const ScanBillPage: React.FC<ScanBillPageProps> = ({
   onScanComplete,
   onManualTypeClick,
 }) => {
-  const [mode, setMode] = useState<'single' | 'batch'>('single');
+  const [cameraStatus, setCameraStatus] = useState<CameraStatus>('idle');
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [torchOn, setTorchOn] = useState(false);
-  const [gridOn, setGridOn] = useState(true);
+  const [hasTorch, setHasTorch] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [pipelineStep, setPipelineStep] = useState(0); // 0 = idle, 1 = reading, 2 = extracting, 3 = matching, 4 = complete
+  const [pipelineStep, setPipelineStep] = useState(0); // 0=idle, 1=uploading, 2=OCR, 3=matching, 4=done
+  const [pipelineMessage, setPipelineMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  const handleCaptureClick = () => {
+  // Stop camera tracks cleanly
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }, []);
+
+  // Request permission and start camera stream on user action
+  const requestPermissionAndStartCamera = useCallback(async (facing: 'environment' | 'user' = facingMode) => {
+    stopCamera();
     setErrorMessage(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
+    setCameraStatus('initializing');
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setCameraStatus('unsupported');
+      return;
+    }
+
+    try {
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: { ideal: facing },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+
+      // Check torch capability
+      const videoTrack = stream.getVideoTracks()[0];
+      const capabilities = (videoTrack?.getCapabilities && videoTrack.getCapabilities()) as any;
+      if (capabilities && capabilities.torch) {
+        setHasTorch(true);
+      } else {
+        setHasTorch(false);
+      }
+
+      setCameraStatus('active');
+    } catch (err: any) {
+      console.warn('Camera access error:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setCameraStatus('denied');
+      } else {
+        setCameraStatus('unsupported');
+      }
+    }
+  }, [facingMode, stopCamera]);
+
+  // Clean up stream on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, [stopCamera]);
+
+  // Toggle Torch
+  const handleToggleTorch = async () => {
+    if (!streamRef.current) return;
+    const track = streamRef.current.getVideoTracks()[0];
+    if (!track) return;
+
+    try {
+      const nextTorch = !torchOn;
+      await (track as any).applyConstraints({
+        advanced: [{ torch: nextTorch }],
+      });
+      setTorchOn(nextTorch);
+    } catch (e) {
+      console.warn('Torch toggle failed:', e);
     }
   };
 
-  const handleGalleryClick = () => {
+  // Flip Camera
+  const handleFlipCamera = () => {
+    const nextFacing = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(nextFacing);
+    requestPermissionAndStartCamera(nextFacing);
+  };
+
+  // Capture frame from active video
+  const handleCapturePhoto = () => {
+    const video = videoRef.current;
+    if (!video || cameraStatus !== 'active') return;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+    stopCamera();
+    setCapturedImage(dataUrl);
+    setCameraStatus('captured');
+  };
+
+  // Trigger device camera or gallery capture
+  const handleDeviceCameraCapture = async (source: 'camera' | 'photos' = 'camera') => {
     setErrorMessage(null);
-    if (galleryInputRef.current) {
-      galleryInputRef.current.click();
+    try {
+      const result = await captureBillWithCapacitor(source);
+      if (result && result.dataUrl) {
+        stopCamera();
+        setCapturedImage(result.dataUrl);
+        setCameraStatus('captured');
+        processImage(result.dataUrl, `image/${result.format || 'jpeg'}`);
+      } else {
+        if (source === 'photos') {
+          galleryInputRef.current?.click();
+        } else if (cameraStatus !== 'active') {
+          requestPermissionAndStartCamera(facingMode);
+        }
+      }
+    } catch (err: any) {
+      console.warn('Camera capture cancelled or failed:', err);
+      if (source === 'photos') {
+        galleryInputRef.current?.click();
+      } else if (cameraStatus !== 'active') {
+        requestPermissionAndStartCamera(facingMode);
+      }
     }
   };
 
-  const processImageFile = async (file: File) => {
+  // Retake photo
+  const handleRetake = () => {
+    setCapturedImage(null);
+    setErrorMessage(null);
+    requestPermissionAndStartCamera(facingMode);
+  };
+
+  // Process image with Gemini API + catalogue matching
+  const processImage = async (dataUrl: string, mimeType = 'image/jpeg') => {
     setIsProcessing(true);
     setPipelineStep(1);
+    setPipelineMessage('Uploading bill image...');
     setErrorMessage(null);
 
-    const reader = new FileReader();
-    reader.onerror = () => {
-      setIsProcessing(false);
-      setPipelineStep(0);
-      setErrorMessage('Failed to read image file. Please try again.');
-    };
-
-    reader.onload = async () => {
-      const base64Data = reader.result as string;
-
+    try {
       setPipelineStep(2);
+      setPipelineMessage('Reading Marathi & English ink, numerals and totals...');
 
-      try {
-        const response = await fetch('/api/scan-bill', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageBase64: base64Data,
-            mimeType: file.type || 'image/jpeg',
-          }),
-        });
+      const response = await fetch('/api/scan-bill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: dataUrl,
+          mimeType,
+        }),
+      });
 
-        setPipelineStep(3);
+      if (!response.ok) {
+        const errorJson = await response.json().catch(() => null);
+        throw new Error(errorJson?.message || 'Could not extract bill content from this photo.');
+      }
 
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success && result.data) {
-            setPipelineStep(4);
-            const extracted = result.data;
+      setPipelineStep(3);
+      setPipelineMessage('Matching items with your shop product catalogue & shorthand...');
 
-            const billData: Partial<Bill> = {
-              invoice_number: extracted.invoice_number || `INV-${Math.floor(1000 + Math.random() * 9000)}`,
-              bill_date: extracted.bill_date || new Date().toISOString().split('T')[0],
-              customer_name: extracted.customer?.name || 'Counter Customer (ग्राहक)',
-              customer_phone: extracted.customer?.phone || '',
-              customer_address: extracted.customer?.address || '',
-              customer_gstin: extracted.customer?.gstin || '',
-              status: extracted.uncertain_fields_count > 0 ? 'needs_review' : 'verified',
-              source: 'scan',
-              scan_file_url: base64Data,
-              items: extracted.items.map((item: any, idx: number) => ({
-                id: `scanned-item-${idx}`,
-                original_text: item.original_text || item.normalized_name,
-                product_name_snapshot: item.normalized_name,
-                product_name_marathi: item.name_marathi || '',
-                brand_snapshot: item.brand || '',
-                quantity: item.quantity || 1,
-                unit: item.unit || 'Nos',
-                unit_price: item.unit_price || 0,
-                gst_percent: item.gst_percent || 18,
-                total: (item.quantity || 1) * (item.unit_price || 0),
-                confidence: item.confidence || 'looks_correct',
-                uncertainty_reason: item.uncertainty_reason || '',
-                suggested_product_name: item.suggested_product_name,
-                suggested_rate: item.suggested_rate,
-              })),
-            };
+      const result = await response.json();
+      if (!result.success || !result.data) {
+        throw new Error('AI could not identify items on this bill. Please ensure good lighting and text clarity.');
+      }
 
-            setTimeout(() => {
-              setIsProcessing(false);
-              onScanComplete(billData, base64Data);
-            }, 600);
-            return;
+      const extracted = result.data;
+
+      // Intelligent Product Matching against real database
+      const enrichedItems = extracted.items.map((item: any, idx: number) => {
+        const matchResult = db.matchProduct(item.normalized_name || item.original_text || '');
+
+        let confidence = item.confidence || 'looks_correct';
+        let suggestedProdId: string | undefined = undefined;
+        let suggestedProdName: string | undefined = item.suggested_product_name;
+        let suggestedRate: number | undefined = item.suggested_rate;
+        let reason = item.uncertainty_reason;
+
+        if (matchResult.product) {
+          suggestedProdId = matchResult.product.id;
+          suggestedProdName = matchResult.product.name;
+          suggestedRate = matchResult.product.selling_price;
+
+          if (matchResult.confidence === 'exact' || matchResult.confidence === 'shorthand') {
+            confidence = 'looks_correct';
+          } else if (matchResult.confidence === 'alias' || matchResult.confidence === 'partial') {
+            confidence = 'needs_review';
+            reason = `Catalogue match found: "${matchResult.product.name}"`;
           }
         }
 
-        const errJson = await response.json().catch(() => null);
-        throw new Error(errJson?.message || 'Could not extract bill content from this photo.');
-      } catch (err: any) {
-        setIsProcessing(false);
-        setPipelineStep(0);
-        setErrorMessage(
-          err.message || 'Could not read text from this image. Please upload a clear photo or type manually.'
-        );
-      }
-    };
+        // If rate was unreadable (<= 0), mark as uncertain
+        const unitPrice = Number(item.unit_price) || 0;
+        if (unitPrice <= 0) {
+          confidence = 'uncertain';
+          reason = reason || 'Rate unreadable. Please confirm or enter rate.';
+        }
 
-    reader.readAsDataURL(file);
+        const qty = Number(item.quantity) || 1;
+        const rate = unitPrice > 0 ? unitPrice : (suggestedRate || 0);
+
+        return {
+          id: `scanned-item-${idx}-${Date.now()}`,
+          product_id: suggestedProdId,
+          original_text: item.original_text || item.normalized_name,
+          product_name_snapshot: item.normalized_name || item.original_text || 'Item',
+          product_name_marathi: item.name_marathi || '',
+          brand_snapshot: item.brand || '',
+          quantity: qty,
+          unit: item.unit || 'Nos',
+          unit_price: rate,
+          gst_percent: Number(item.gst_percent) || 18,
+          total: qty * rate,
+          confidence,
+          uncertainty_reason: reason,
+          suggested_product_id: suggestedProdId,
+          suggested_product_name: suggestedProdName,
+          suggested_rate: suggestedRate,
+        };
+      });
+
+      setPipelineStep(4);
+      setPipelineMessage('Verification ready!');
+
+      const billData: Partial<Bill> = {
+        invoice_number: extracted.invoice_number || db.getNextInvoiceNumber(),
+        bill_date: extracted.bill_date || new Date().toISOString().split('T')[0],
+        customer_name: extracted.customer?.name || 'Counter Cash Sale (किरकोळ ग्राहक)',
+        customer_phone: extracted.customer?.phone || '',
+        customer_address: extracted.customer?.address || '',
+        customer_gstin: extracted.customer?.gstin || '',
+        status: enrichedItems.some((i: any) => i.confidence !== 'looks_correct') ? 'needs_review' : 'verified',
+        source: 'scan',
+        scan_file_url: dataUrl,
+        items: enrichedItems,
+      };
+
+      setTimeout(() => {
+        setIsProcessing(false);
+        onScanComplete(billData, dataUrl);
+      }, 400);
+    } catch (err: any) {
+      setIsProcessing(false);
+      setPipelineStep(0);
+      setErrorMessage(
+        err.message || 'Could not read text from this image. Please upload a clear photo or type manually.'
+      );
+    }
   };
 
+  // Handle file picker selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      processImageFile(e.target.files[0]);
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        stopCamera();
+        setCapturedImage(dataUrl);
+        setCameraStatus('captured');
+        processImage(dataUrl, file.type || 'image/jpeg');
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   return (
-    <div className="flex flex-col w-full gap-space-md max-w-4xl mx-auto">
-      {/* Hidden file inputs for Camera and Gallery picker */}
+    <div className="flex flex-col w-full max-w-4xl mx-auto space-y-5 pb-10">
+      {/* Hidden file inputs for Camera fallback & Gallery/PDF upload */}
       <input
         ref={fileInputRef}
         type="file"
@@ -139,313 +320,358 @@ export const ScanBillPage: React.FC<ScanBillPageProps> = ({
       <input
         ref={galleryInputRef}
         type="file"
-        accept="image/*,application/pdf"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
         className="hidden"
         onChange={handleFileChange}
       />
 
-      {/* Live Detection Coach Pill */}
-      <div className="w-full bg-surface-container-high rounded-xl p-space-sm flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-space-xs min-w-0">
-          <span className="material-symbols-outlined text-[20px] text-secondary shrink-0">
-            lightbulb
-          </span>
-          <p className="font-label-md text-label-md text-on-surface truncate">
-            <span>हात स्थिर ठेवा</span> •{' '}
-            <span className="text-on-surface-variant">Hold steady & avoid harsh shadows on bill</span>
+      {/* Screen Title & Quick Actions */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold text-on-surface">Scan Physical Bill</h1>
+            <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-[11px] font-bold">
+              <span className="material-symbols-outlined text-[13px]">document_scanner</span>
+              AI Bill Scanner
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5">
+            Capture or upload physical invoices (कच्ची पावती) in Marathi or English
           </p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-sm text-label-sm font-bold">
-          <span className="w-2 h-2 rounded-full bg-secondary"></span>
-          <span>Auto-Edge</span>
-        </div>
+        <button
+          onClick={onManualTypeClick}
+          className="h-10 px-3.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs sm:text-sm font-semibold flex items-center gap-1.5 transition-colors"
+          type="button"
+        >
+          <span className="material-symbols-outlined text-[18px]">keyboard</span>
+          <span>Manual POS</span>
+        </button>
       </div>
 
-      {/* Error Message if image unreadable */}
+      {/* Error / Alert Message */}
       {errorMessage && (
-        <div className="p-4 rounded-xl bg-error-container text-on-error-container flex items-start justify-between gap-3 shadow-sm">
-          <div className="flex items-start gap-2 min-w-0">
-            <span className="material-symbols-outlined text-[22px] text-error shrink-0">error</span>
+        <div className="p-4 rounded-2xl bg-error-container text-on-error-container flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs border border-error/20">
+          <div className="flex items-start gap-2.5">
+            <span className="material-symbols-outlined text-[24px] text-error shrink-0">error</span>
             <div className="flex flex-col">
-              <span className="font-body-bold text-body-bold">Image Recognition Alert</span>
-              <p className="font-body-md text-body-md mt-0.5">{errorMessage}</p>
+              <span className="font-bold text-sm">Scan Recognition Alert</span>
+              <p className="text-xs sm:text-sm mt-0.5 opacity-90">{errorMessage}</p>
             </div>
           </div>
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            <button
+              onClick={handleRetake}
+              className="h-9 px-3 rounded-lg bg-surface text-on-surface text-xs font-bold"
+              type="button"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={onManualTypeClick}
+              className="h-9 px-3 rounded-lg bg-error text-on-error text-xs font-bold"
+              type="button"
+            >
+              Enter Manually
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Camera Viewfinder / Preview Stage */}
+      <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] max-h-[480px] rounded-2xl overflow-hidden bg-primary-container shadow-md flex items-center justify-center select-none border border-surface-container-high">
+        {/* Active Live Video Stream */}
+        {cameraStatus === 'active' && (
+          <video
+            ref={videoRef}
+            playsInline
+            autoPlay
+            muted
+            className="w-full h-full object-cover"
+          />
+        )}
+
+        {/* Captured Photo / Uploaded Preview */}
+        {capturedImage && (
+          <img
+            src={capturedImage}
+            alt="Captured Bill"
+            className="w-full h-full object-contain bg-black/80"
+          />
+        )}
+
+        {/* Initializing Spinner */}
+        {cameraStatus === 'initializing' && !capturedImage && (
+          <div className="flex flex-col items-center gap-2 text-white p-6">
+            <span className="material-symbols-outlined text-[36px] animate-spin">refresh</span>
+            <p className="text-sm font-semibold">Requesting camera permission...</p>
+          </div>
+        )}
+
+        {/* Initial Idle Screen - Asks Permission to Start Camera */}
+        {cameraStatus === 'idle' && !capturedImage && (
+          <div className="flex flex-col items-center text-center p-6 max-w-md text-white">
+            <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center mb-3">
+              <span className="material-symbols-outlined text-[36px] text-secondary-fixed">photo_camera</span>
+            </div>
+            <h3 className="font-bold text-lg">Start Camera to Scan Bill</h3>
+            <p className="text-xs sm:text-sm text-white/80 mt-1 mb-5">
+              Click below to grant camera access and align your physical bill within the frame.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={() => requestPermissionAndStartCamera(facingMode)}
+                className="h-12 px-6 rounded-xl bg-secondary-fixed text-on-secondary-fixed text-sm font-bold flex items-center gap-2 shadow-md active:scale-98 transition-transform"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[20px]">videocam</span>
+                <span>Start Camera</span>
+              </button>
+              <button
+                onClick={() => handleDeviceCameraCapture('photos')}
+                className="h-12 px-5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-sm font-semibold flex items-center gap-2 transition-colors"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[20px]">folder_open</span>
+                <span>Upload Bill Photo</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Camera Permission Denied Screen */}
+        {cameraStatus === 'denied' && !capturedImage && (
+          <div className="flex flex-col items-center text-center p-6 max-w-md text-white">
+            <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center mb-3">
+              <span className="material-symbols-outlined text-[32px] text-error">no_photography</span>
+            </div>
+            <h3 className="font-bold text-base sm:text-lg">Camera Permission Denied</h3>
+            <p className="text-xs sm:text-sm text-white/80 mt-1 mb-4">
+              Please allow camera access in your device or browser settings, or select a photo from your gallery.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
+              <button
+                onClick={() => requestPermissionAndStartCamera(facingMode)}
+                className="h-10 px-4 rounded-xl bg-white text-primary text-xs font-bold flex items-center gap-1.5"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[16px]">refresh</span>
+                <span>Retry Permission</span>
+              </button>
+              <button
+                onClick={() => handleDeviceCameraCapture('photos')}
+                className="h-10 px-4 rounded-xl bg-secondary text-on-secondary text-xs font-bold flex items-center gap-1.5"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[16px]">folder_open</span>
+                <span>Upload Bill Photo</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Camera Unsupported Screen */}
+        {cameraStatus === 'unsupported' && !capturedImage && (
+          <div className="flex flex-col items-center text-center p-6 max-w-md text-white">
+            <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center mb-3">
+              <span className="material-symbols-outlined text-[32px] text-secondary">photo_camera</span>
+            </div>
+            <h3 className="font-bold text-base sm:text-lg">Capture Bill Photo</h3>
+            <p className="text-xs sm:text-sm text-white/80 mt-1 mb-4">
+              Use your device camera or select a photo/PDF of your physical bill.
+            </p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              <button
+                onClick={() => handleDeviceCameraCapture('camera')}
+                className="h-11 px-5 rounded-xl bg-primary text-on-primary text-sm font-bold flex items-center gap-2"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[20px]">photo_camera</span>
+                <span>Open Camera</span>
+              </button>
+              <button
+                onClick={() => handleDeviceCameraCapture('photos')}
+                className="h-11 px-5 rounded-xl bg-secondary text-on-secondary text-sm font-bold flex items-center gap-2"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[20px]">folder_open</span>
+                <span>Choose File / Gallery</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Viewfinder Overlays when live camera is active */}
+        {cameraStatus === 'active' && (
+          <>
+            {/* Guide targeting frame */}
+            <div className="absolute inset-6 sm:inset-10 pointer-events-none rounded-xl border-2 border-dashed border-white/40 flex items-center justify-center">
+              <div className="w-full h-full flex flex-col justify-between p-2">
+                <div className="flex justify-between">
+                  <div className="w-6 h-6 border-t-4 border-l-4 border-secondary-fixed rounded-tl"></div>
+                  <div className="w-6 h-6 border-t-4 border-r-4 border-secondary-fixed rounded-tr"></div>
+                </div>
+                <div className="flex justify-between">
+                  <div className="w-6 h-6 border-b-4 border-l-4 border-secondary-fixed rounded-bl"></div>
+                  <div className="w-6 h-6 border-b-4 border-r-4 border-secondary-fixed rounded-br"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Top Toolbar in Camera */}
+            <div className="absolute top-3 inset-x-3 z-30 flex items-center justify-between pointer-events-auto">
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md text-white text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-secondary-fixed"></span>
+                <span>Align Bill Inside Box</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {hasTorch && (
+                  <button
+                    onClick={handleToggleTorch}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md transition-colors ${
+                      torchOn ? 'bg-secondary text-on-secondary' : 'bg-black/60 text-white'
+                    }`}
+                    type="button"
+                    aria-label="Toggle Flashlight"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">
+                      {torchOn ? 'flashlight_off' : 'flashlight_on'}
+                    </span>
+                  </button>
+                )}
+
+                <button
+                  onClick={handleFlipCamera}
+                  className="w-10 h-10 rounded-full bg-black/60 text-white flex items-center justify-center backdrop-blur-md transition-colors"
+                  type="button"
+                  aria-label="Flip Camera"
+                >
+                  <span className="material-symbols-outlined text-[20px]">flip_camera_android</span>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Processing Overlay during Gemini Call */}
+        {isProcessing && (
+          <div className="absolute inset-0 z-40 bg-black/75 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-white text-center">
+            <span className="material-symbols-outlined text-[44px] text-secondary-fixed animate-spin mb-3">
+              progress_activity
+            </span>
+            <span className="font-bold text-lg mb-1">Analyzing Physical Bill with AI</span>
+            <p className="text-sm text-white/80 max-w-sm mb-4">{pipelineMessage}</p>
+            <div className="w-48 h-2 bg-white/20 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-secondary-fixed transition-all duration-300"
+                style={{ width: `${pipelineStep * 25}%` }}
+              ></div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Captured Photo Actions: Retake vs Process */}
+      {capturedImage && !isProcessing && (
+        <div className="p-4 rounded-2xl bg-surface-container border border-surface-container-high flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="material-symbols-outlined text-[24px] text-secondary">check_circle</span>
+            <div>
+              <span className="font-bold text-sm text-on-surface block">Photo Captured</span>
+              <span className="text-xs text-on-surface-variant">Ready for AI extraction</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              onClick={handleRetake}
+              className="flex-1 sm:flex-none h-11 px-4 rounded-xl bg-surface-container-highest text-on-surface text-xs font-bold flex items-center justify-center gap-1.5 active:scale-98 transition-transform"
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[18px]">replay</span>
+              <span>Retake</span>
+            </button>
+            <button
+              onClick={() => handleDeviceCameraCapture('camera')}
+              className="flex-1 sm:flex-none h-11 px-4 rounded-xl bg-surface-container-highest text-on-surface text-xs font-bold flex items-center justify-center gap-1.5 active:scale-98 transition-transform"
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[18px]">photo_camera</span>
+              <span>New Photo</span>
+            </button>
+            <button
+              onClick={() => processImage(capturedImage)}
+              className="flex-1 sm:flex-none h-11 px-5 rounded-xl bg-primary text-on-primary text-xs font-bold flex items-center justify-center gap-1.5 active:scale-98 transition-transform shadow-sm"
+              type="button"
+            >
+              <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+              <span>Extract with AI</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Primary Capture & Upload Control Station */}
+      {!capturedImage && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl bg-surface-container-low border border-surface-container">
+          {/* Gallery / File Picker Button */}
           <button
-            onClick={onManualTypeClick}
-            className="px-3 py-1.5 rounded-lg bg-error text-on-error font-label-sm font-bold shrink-0 active:scale-95"
+            onClick={() => handleDeviceCameraCapture('photos')}
+            className="w-full sm:w-auto h-12 px-5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-sm font-semibold flex items-center justify-center gap-2 transition-colors active:scale-98"
             type="button"
           >
-            Enter Manually
+            <span className="material-symbols-outlined text-[22px] text-secondary">photo_library</span>
+            <span>Gallery / Files</span>
+          </button>
+
+          {/* Primary Camera Buttons */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {cameraStatus === 'active' ? (
+              <button
+                onClick={handleCapturePhoto}
+                className="w-full sm:w-auto h-14 px-8 rounded-xl bg-primary text-on-primary font-bold text-base flex items-center justify-center gap-2 shadow-md hover:opacity-95 active:scale-98 transition-all"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[24px]">photo_camera</span>
+                <span>Take Photo</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => requestPermissionAndStartCamera(facingMode)}
+                className="w-full sm:w-auto h-14 px-8 rounded-xl bg-primary text-on-primary font-bold text-base flex items-center justify-center gap-2 shadow-md hover:opacity-95 active:scale-98 transition-all"
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[24px]">photo_camera</span>
+                <span>Start Camera</span>
+              </button>
+            )}
+          </div>
+
+          {/* Manual POS button */}
+          <button
+            onClick={onManualTypeClick}
+            className="w-full sm:w-auto h-12 px-5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-sm font-semibold flex items-center justify-center gap-2 transition-colors active:scale-98"
+            type="button"
+          >
+            <span className="material-symbols-outlined text-[20px] text-on-surface-variant">dialpad</span>
+            <span>Manual Type</span>
           </button>
         </div>
       )}
 
-      {/* Camera Viewfinder Stage */}
-      <div
-        className="relative w-full aspect-[3/4] max-h-[460px] rounded-xl overflow-hidden bg-primary-container shadow-md flex items-center justify-center select-none"
-        id="cameraViewport"
-      >
-        {/* Camera Texture Background */}
-        <div className="absolute inset-0 bg-gradient-to-b from-primary-container/90 via-transparent to-primary-container/95 z-10 pointer-events-none"></div>
-
-        {/* Counter Grid overlay */}
-        {gridOn && (
-          <div className="absolute inset-0 z-15 pointer-events-none grid grid-cols-3 grid-rows-3 opacity-20">
-            <div className="border-r border-b border-white"></div>
-            <div className="border-r border-b border-white"></div>
-            <div className="border-b border-white"></div>
-            <div className="border-r border-b border-white"></div>
-            <div className="border-r border-b border-white"></div>
-            <div className="border-b border-white"></div>
-            <div className="border-r border-white"></div>
-            <div className="border-r border-white"></div>
-            <div></div>
-          </div>
-        )}
-
-        {/* Interactive targeting surface */}
-        <div className="relative w-[85%] h-[85%] rounded-lg border-2 border-dashed border-white/30 flex flex-col items-center justify-center p-6 text-center z-15">
-          <div className="w-16 h-16 rounded-full bg-surface/10 backdrop-blur-md flex items-center justify-center text-secondary-fixed mb-3">
-            <span className="material-symbols-outlined text-[36px]">document_scanner</span>
-          </div>
-          <h3 className="font-headline-sm text-headline-sm text-white font-bold mb-1">
-            Scan Physical Bill (पावती)
-          </h3>
-          <p className="font-body-md text-white/80 max-w-xs text-sm">
-            Align Marathi or English bill inside this frame and tap the shutter below to capture.
+      {/* Trust & Intelligence Note */}
+      <div className="p-4 rounded-2xl bg-surface-container-lowest border border-surface-container flex items-start gap-3">
+        <span className="material-symbols-outlined text-secondary text-[22px] shrink-0 mt-0.5">
+          verified_user
+        </span>
+        <div className="text-xs text-on-surface-variant space-y-1">
+          <p className="font-semibold text-on-surface">
+            मानवी पडताळणी (Human Verification Guaranteed):
           </p>
-        </div>
-
-        {/* Active High-Contrast Targeting Corners (Green Bounding Box) */}
-        <div className="absolute w-[88%] h-[90%] pointer-events-none z-20 flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div className="w-8 h-8 rounded-tl-lg bg-transparent flex items-start justify-start">
-              <div className="w-full h-1.5 bg-secondary-fixed rounded-full shadow-[0_0_8px_rgba(133,248,196,0.9)]"></div>
-              <div className="w-1.5 h-8 bg-secondary-fixed rounded-full -ml-1.5 shadow-[0_0_8px_rgba(133,248,196,0.9)]"></div>
-            </div>
-            <div className="w-8 h-8 rounded-tr-lg bg-transparent flex items-start justify-end">
-              <div className="w-1.5 h-8 bg-secondary-fixed rounded-full -mr-1.5 shadow-[0_0_8px_rgba(133,248,196,0.9)]"></div>
-              <div className="w-full h-1.5 bg-secondary-fixed rounded-full shadow-[0_0_8px_rgba(133,248,196,0.9)]"></div>
-            </div>
-          </div>
-
-          {/* Horizontal AI Laser Scan Line (animates while processing) */}
-          <div
-            className={`w-full h-1 bg-gradient-to-r from-transparent via-secondary-fixed to-transparent shadow-[0_0_12px_#68dba9] ${
-              isProcessing ? 'opacity-100 animate-pulse' : 'opacity-40'
-            }`}
-          ></div>
-
-          <div className="flex justify-between items-end">
-            <div className="w-8 h-8 rounded-bl-lg bg-transparent flex items-end justify-start">
-              <div className="w-full h-1.5 bg-secondary-fixed rounded-full shadow-[0_0_8px_rgba(133,248,196,0.9)]"></div>
-              <div className="w-1.5 h-8 bg-secondary-fixed rounded-full -ml-1.5 shadow-[0_0_8px_rgba(133,248,196,0.9)]"></div>
-            </div>
-            <div className="w-8 h-8 rounded-br-lg bg-transparent flex items-end justify-end">
-              <div className="w-1.5 h-8 bg-secondary-fixed rounded-full -mr-1.5 shadow-[0_0_8px_rgba(133,248,196,0.9)]"></div>
-              <div className="w-full h-1.5 bg-secondary-fixed rounded-full shadow-[0_0_8px_rgba(133,248,196,0.9)]"></div>
-            </div>
-          </div>
-        </div>
-
-        {/* Viewport Toolbar (Floating Inside Lens) */}
-        <div className="absolute top-3 inset-x-3 z-30 flex items-center justify-between pointer-events-auto">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/70 backdrop-blur-md text-on-primary font-label-md text-label-md">
-            <span className="w-2 h-2 rounded-full bg-secondary-fixed"></span>
-            <span>Marathi + English OCR Active</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setTorchOn(!torchOn)}
-              className={`w-10 h-10 rounded-full backdrop-blur-md flex items-center justify-center transition-transform active:scale-90 ${
-                torchOn ? 'bg-secondary-container text-on-secondary-container' : 'bg-primary/70 text-on-primary'
-              }`}
-              type="button"
-              aria-label="Toggle Torch"
-            >
-              <span className="material-symbols-outlined text-[20px]">
-                {torchOn ? 'flashlight_off' : 'flashlight_on'}
-              </span>
-            </button>
-            <button
-              onClick={() => setGridOn(!gridOn)}
-              className={`w-10 h-10 rounded-full backdrop-blur-md flex items-center justify-center transition-transform active:scale-90 ${
-                gridOn ? 'bg-secondary-container text-on-secondary-container' : 'bg-primary/70 text-on-primary'
-              }`}
-              type="button"
-              aria-label="Toggle Counter Grid"
-            >
-              <span className="material-symbols-outlined text-[20px]">grid_4x4</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Real-Time AI Extraction Pipeline Drawer */}
-      <div className="w-full bg-surface-container rounded-xl p-space-md flex flex-col gap-space-sm shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-space-xs">
-            <span className="material-symbols-outlined text-[18px] text-secondary">psychology</span>
-            <span className="font-headline-sm text-headline-sm text-on-surface">Bill Recognition Pipeline</span>
-          </div>
-          <span className="px-2 py-0.5 rounded-full bg-surface-container-high font-label-sm text-label-sm text-on-surface font-bold">
-            {pipelineStep > 0 ? `${pipelineStep} of 4 Active` : 'Ready'}
-          </span>
-        </div>
-
-        {/* Pipeline Stages */}
-        <div className="flex flex-col gap-2 pt-1">
-          <div className="flex items-center justify-between p-2 rounded-lg bg-surface-container-lowest">
-            <div className="flex items-center gap-space-sm min-w-0">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${pipelineStep >= 1 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container text-on-surface-variant'}`}>
-                <span className="material-symbols-outlined text-[16px]">
-                  {pipelineStep >= 1 ? 'check' : 'document_scanner'}
-                </span>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="font-body-bold text-body-bold text-on-surface truncate">
-                  1. Read Marathi & English Ink
-                </span>
-                <span className="font-label-sm text-label-sm text-on-surface-variant">
-                  Detects Devanagari handwriting & printed fonts
-                </span>
-              </div>
-            </div>
-            <span className="font-label-sm text-label-sm px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-bold">
-              {pipelineStep >= 1 ? '100%' : 'Standby'}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between p-2 rounded-lg bg-surface-container-lowest">
-            <div className="flex items-center gap-space-sm min-w-0">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${pipelineStep >= 2 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container text-on-surface-variant'}`}>
-                <span className="material-symbols-outlined text-[16px]">
-                  {pipelineStep >= 2 ? 'check' : 'calculate'}
-                </span>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="font-body-bold text-body-bold text-on-surface truncate">
-                  2. Quantities & Rates Parsing
-                </span>
-                <span className="font-label-sm text-label-sm text-on-surface-variant">
-                  Extracts numerals, rates, and units
-                </span>
-              </div>
-            </div>
-            <span className="font-label-sm text-label-sm px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-bold">
-              {pipelineStep >= 2 ? '100%' : 'Standby'}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between p-2 rounded-lg bg-surface-container-lowest">
-            <div className="flex items-center gap-space-sm min-w-0">
-              <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${pipelineStep >= 3 ? 'bg-secondary-container text-on-secondary-container' : 'bg-surface-container text-on-surface-variant'}`}>
-                <span className="material-symbols-outlined text-[16px]">
-                  {pipelineStep >= 3 ? (pipelineStep === 3 ? 'sync' : 'check') : 'inventory_2'}
-                </span>
-              </div>
-              <div className="flex flex-col min-w-0">
-                <span className="font-body-bold text-body-bold text-on-surface truncate">
-                  3. Matching Shop Catalogue
-                </span>
-                <span className="font-label-sm text-label-sm text-on-surface-variant">
-                  Matches confirmed products, aliases & shorthand
-                </span>
-              </div>
-            </div>
-            <span className="font-label-sm text-label-sm px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-bold">
-              {pipelineStep >= 3 ? (pipelineStep === 3 ? 'Scanning...' : 'Done') : 'Standby'}
-            </span>
-          </div>
-        </div>
-
-        {/* Assurance Trust Note */}
-        <div className="flex items-start gap-2 p-2 rounded-lg bg-surface-container-low text-on-surface-variant">
-          <span className="material-symbols-outlined text-[18px] text-on-surface-variant shrink-0 mt-0.5">
-            verified_user
-          </span>
-          <p className="font-label-sm text-label-sm">
-            <strong className="text-on-surface">पूर्ण नियंत्रण:</strong> AI saves typing time. You will verify and
-            edit each price on screen before adding to your ledger.
+          <p>
+            Powered by high-precision document scanning and Gemini AI. Captured bills are analyzed with handwriting understanding and matched against your catalogue before any records are saved.
           </p>
-        </div>
-      </div>
-
-      {/* Bottom Capture Interaction Station */}
-      <div className="w-full pt-1 flex flex-col gap-space-sm pb-6">
-        {/* Batch / Single Switcher */}
-        <div className="flex p-1 rounded-xl bg-surface-container-high">
-          <button
-            onClick={() => setMode('single')}
-            className={`flex-1 min-h-[40px] rounded-lg font-label-md text-label-md flex items-center justify-center gap-1 transition-all ${
-              mode === 'single'
-                ? 'bg-surface-container-lowest text-on-surface shadow-sm font-bold'
-                : 'text-on-surface-variant hover:text-on-surface'
-            }`}
-            type="button"
-          >
-            <span className="material-symbols-outlined text-[18px]">description</span>
-            <span>Single Bill (एक पावती)</span>
-          </button>
-          <button
-            onClick={() => setMode('batch')}
-            className={`flex-1 min-h-[40px] rounded-lg font-label-md text-label-md flex items-center justify-center gap-1 transition-all ${
-              mode === 'batch'
-                ? 'bg-surface-container-lowest text-on-surface shadow-sm font-bold'
-                : 'text-on-surface-variant hover:text-on-surface'
-            }`}
-            type="button"
-          >
-            <span className="material-symbols-outlined text-[18px]">filter_none</span>
-            <span>Batch Mode (अनेक पावत्या)</span>
-          </button>
-        </div>
-
-        {/* Shutter & Actions */}
-        <div className="flex items-center justify-around px-space-md py-3 bg-surface-container-low rounded-xl">
-          <button
-            onClick={handleGalleryClick}
-            className="flex flex-col items-center gap-1 min-w-[56px] min-h-[56px] justify-center text-on-surface hover:text-secondary transition-all active:scale-95"
-            type="button"
-          >
-            <div className="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-on-surface">
-              <span className="material-symbols-outlined text-[24px]">folder_open</span>
-            </div>
-            <span className="font-label-sm text-[10px] text-on-surface-variant font-semibold">
-              PDF / Gallery
-            </span>
-          </button>
-
-          {/* Primary Tactile Shutter */}
-          <button
-            onClick={handleCaptureClick}
-            disabled={isProcessing}
-            className="relative w-20 h-20 rounded-full bg-primary flex items-center justify-center shadow-lg transition-transform active:scale-95 group"
-            aria-label="Capture Bill Document"
-            type="button"
-          >
-            <span className="absolute inset-0 rounded-full bg-secondary-container opacity-30 scale-105 group-active:scale-110 transition-transform"></span>
-            <span className="w-16 h-16 rounded-full bg-surface-container-lowest flex items-center justify-center group-hover:scale-102 transition-transform">
-              <span className="material-symbols-outlined text-[32px] text-primary">
-                {isProcessing ? 'hourglass_top' : 'photo_camera'}
-              </span>
-            </span>
-          </button>
-
-          {/* Manual Type */}
-          <button
-            onClick={onManualTypeClick}
-            className="flex flex-col items-center gap-1 min-w-[56px] min-h-[56px] justify-center text-on-surface hover:text-secondary transition-all active:scale-95"
-            type="button"
-          >
-            <div className="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-on-surface">
-              <span className="material-symbols-outlined text-[24px]">dialpad</span>
-            </div>
-            <span className="font-label-sm text-[10px] text-on-surface-variant font-semibold">
-              Manual Type
-            </span>
-          </button>
         </div>
       </div>
     </div>

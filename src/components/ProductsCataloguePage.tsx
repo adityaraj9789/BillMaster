@@ -267,11 +267,11 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
                 </div>
 
                 {/* Card Action Footer */}
-                <div className="flex items-center justify-between pt-1 gap-2">
+                <div className="flex items-center justify-between pt-1 gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => onEditProduct(prod)}
-                      className="h-10 px-3.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform font-semibold"
+                      className="h-10 px-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md flex items-center gap-1 shadow-sm active:scale-95 transition-transform font-semibold"
                       type="button"
                     >
                       <span className="material-symbols-outlined text-[16px]">edit</span>
@@ -279,7 +279,7 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
                     </button>
                     <button
                       onClick={() => onViewPriceLog(prod)}
-                      className="h-10 px-3.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform font-semibold"
+                      className="h-10 px-3 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-label-md text-label-md flex items-center gap-1 shadow-sm active:scale-95 transition-transform font-semibold"
                       type="button"
                     >
                       <span className="material-symbols-outlined text-[16px]">history</span>
@@ -288,7 +288,7 @@ export const ProductsCataloguePage: React.FC<ProductsCataloguePageProps> = ({
                   </div>
                   <button
                     onClick={() => onAddToBill(prod)}
-                    className="h-10 px-4 rounded-xl bg-primary text-on-primary font-label-md text-label-md flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform font-bold"
+                    className="h-10 px-4 rounded-xl bg-primary text-on-primary font-label-md text-label-md flex items-center gap-1.5 shadow-sm active:scale-95 transition-transform font-bold shrink-0 ml-auto"
                     type="button"
                   >
                     <span className="material-symbols-outlined text-[18px]">add_shopping_cart</span>

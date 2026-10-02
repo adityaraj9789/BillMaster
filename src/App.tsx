@@ -222,6 +222,10 @@ export default function App() {
               setSelectedBillForReview(null);
               setActiveTab('dashboard');
             }}
+            onAddProductToCatalogue={(prod) => {
+              db.addProduct(prod);
+              setProducts(db.getProducts());
+            }}
           />
         )}
 

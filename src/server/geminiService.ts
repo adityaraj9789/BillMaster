@@ -67,7 +67,12 @@ IMPORTANT INSTRUCTIONS:
    - Never invent or fabricate data.
 `;
 
-  const cleanBase64 = base64Data.replace(/^data:image\/[a-z]+;base64,/, '');
+  let finalMimeType = mimeType || 'image/jpeg';
+  const mimeMatch = base64Data.match(/^data:([^;]+);base64,/);
+  if (mimeMatch && mimeMatch[1]) {
+    finalMimeType = mimeMatch[1];
+  }
+  const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, '');
 
   try {
     const response = await ai.models.generateContent({
@@ -77,7 +82,7 @@ IMPORTANT INSTRUCTIONS:
           {
             inlineData: {
               data: cleanBase64,
-              mimeType,
+              mimeType: finalMimeType,
             },
           },
           { text: prompt },
